@@ -110,6 +110,24 @@ export const translations = {
     mergeDuplicatesLabel: "Merge Duplicate Products",
     noSupplier: "No Supplier",
 
+    // Pharmacy & Medical fields
+    batchNumberLabel: "Batch No.",
+    batchNumberPlaceholder: "e.g. BN-202410",
+    expiryDateLabel: "Expiry Date",
+    genericNameLabel: "Generic / Formula Name",
+    genericNamePlaceholder: "e.g. Paracetamol, Amoxicillin",
+    dosageLabel: "Dosage / Strength",
+    dosagePlaceholder: "e.g. 500mg, 10ml, 1 tab x 3",
+    pharmacySection: "Pharmacy & Expiry Details",
+    pharmacySectionSubtitle: "Batch number, expiry date, generic formula, and dosage",
+    expiredLabel: "Expired",
+    expiringSoonLabel: "Expiring Soon",
+    validStockLabel: "Good Condition",
+    expiryAlerts: "Expiry Alerts",
+    noExpiredItems: "No expired items found.",
+    noExpiringItems: "No items expiring within 60 days.",
+    daysLeft: "days left",
+
     // Reports View
     netProfit: "Net Profit",
     totalRevenue: "Gross Revenue",
@@ -396,6 +414,24 @@ export const translations = {
     barcodeDuplicateError: "ဤ Barcode ရှိပြီးသားဖြစ်ပါသည်။",
     mergeDuplicatesLabel: "ပစ္စည်းနှစ်ခု ပေါင်းစည်းမည်",
     noSupplier: "ဆပ်ပလိုင်ယာမရှိ",
+
+    // Pharmacy & Medical fields
+    batchNumberLabel: "အသုတ်အမှတ် (Batch No.)",
+    batchNumberPlaceholder: "ဥပမာ- BN-202410",
+    expiryDateLabel: "သက်တမ်းကုန်ဆုံးရက် (Expiry Date)",
+    genericNameLabel: "ဆေးဓာတ်အမည် (Generic / Formula)",
+    genericNamePlaceholder: "ဥပမာ- Paracetamol, Amoxicillin",
+    dosageLabel: "ဆေးပမာဏ / အညွှန်း (Dosage / Strength)",
+    dosagePlaceholder: "ဥပမာ- 500mg, 10ml, ၁လုံး ၃ကြိမ်",
+    pharmacySection: "ဆေးဆိုင်နှင့် သက်တမ်းကုန်ဆုံးရက် အချက်အလက်များ",
+    pharmacySectionSubtitle: "အသုတ်နံပါတ်၊ သက်တမ်းကုန်ရက်၊ ဓာတ်အမည်နှင့် ဆေးပမာဏ",
+    expiredLabel: "သက်တမ်းကုန်ဆုံး",
+    expiringSoonLabel: "သက်တမ်းကုန်ခါနီး",
+    validStockLabel: "သက်တမ်းကောင်း",
+    expiryAlerts: "သက်တမ်းကုန်ဆုံးမှု သတိပေးချက်များ",
+    noExpiredItems: "သက်တမ်းကုန်ဆုံးသော ဆေးဝါးမရှိပါ။",
+    noExpiringItems: "၆၀ ရက်အတွင်း သက်တမ်းကုန်မည့် ဆေးဝါးမရှိပါ။",
+    daysLeft: "ရက်ကျန်",
 
     // Reports View
     netProfit: "အသားတင် အမြတ် (Net Profit)",

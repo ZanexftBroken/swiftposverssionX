@@ -161,6 +161,9 @@ export default function PosView({
         (p) =>
           p.name.toLowerCase().includes(lower) ||
           p.sku.toLowerCase().includes(lower) ||
+          (p.genericName && p.genericName.toLowerCase().includes(lower)) ||
+          (p.batchNumber && p.batchNumber.toLowerCase().includes(lower)) ||
+          (p.barcode && p.barcode.toLowerCase().includes(lower)) ||
           (p.variants && p.variants.some((v) => v.name.toLowerCase().includes(lower) || v.sku.toLowerCase().includes(lower)))
       );
     }
@@ -235,6 +238,19 @@ export default function PosView({
   };
 
   const addProductToCartDirectly = (prod: Product, variant: any | null) => {
+    // Pharmacy safety check: Warn cashier if medicine is expired
+    if (prod.expiryDate) {
+      const today = new Date().toISOString().slice(0, 10);
+      if (prod.expiryDate < today) {
+        const proceed = window.confirm(
+          lang === "my"
+            ? `သတိပေးချက်: "${prod.name}" သည် သက်တမ်းကုန်ဆုံးနေပါပြီ (${prod.expiryDate})။ ဆက်လက်ရောင်းချရန် သေချာပါသလား။`
+            : `WARNING: "${prod.name}" has EXPIRED on ${prod.expiryDate}. Do you still want to add it to cart?`
+        );
+        if (!proceed) return;
+      }
+    }
+
     const itemId = variant ? `${prod.id}_${variant.id}` : prod.id;
     const existing = cart.find((i) => i.id === itemId);
     const maxStock = variant ? variant.quantity : prod.quantity;
@@ -277,6 +293,10 @@ export default function PosView({
           costPrice: prod.costPrice || 0,
           disc: 0,
           variantId: variant ? variant.id : undefined,
+          batchNumber: prod.batchNumber,
+          expiryDate: prod.expiryDate,
+          genericName: prod.genericName,
+          dosage: prod.dosage,
         },
       ];
     });
@@ -791,7 +811,10 @@ export default function PosView({
       if (isA5) {
         html += `
           <tr>
-            <td style="padding: 8px 0;">${item.name} ${item.disc > 0 ? `<br><small>(-${item.disc}%)</small>` : ""}</td>
+            <td style="padding: 8px 0;">
+              ${item.name} ${item.disc > 0 ? `<small>(-${item.disc}%)</small>` : ""}
+              ${item.batchNumber || item.expiryDate ? `<br><small style="color:#555;font-size:11px;">${item.batchNumber ? `Batch: ${item.batchNumber} ` : ''}${item.expiryDate ? `Exp: ${item.expiryDate}` : ''}</small>` : ""}
+            </td>
             <td align="center">${item.qty}</td>
             <td align="right">${activePrice.toLocaleString()}</td>
             <td align="right"><b>${itemSub.toLocaleString()}</b></td>
@@ -800,7 +823,10 @@ export default function PosView({
       } else {
         html += `
           <tr>
-            <td style="padding: 4px 0; max-width: 120px;">${item.name} x${item.qty} ${item.disc > 0 ? `<small>(-${item.disc}%)</small>` : ""}</td>
+            <td style="padding: 4px 0; max-width: 130px;">
+              ${item.name} x${item.qty} ${item.disc > 0 ? `<small>(-${item.disc}%)</small>` : ""}
+              ${item.batchNumber || item.expiryDate ? `<br><small style="color:#555;font-size:9px;">${item.batchNumber ? `B:${item.batchNumber} ` : ''}${item.expiryDate ? `Exp:${item.expiryDate}` : ''}</small>` : ""}
+            </td>
             <td align="right">${itemSub.toLocaleString()}</td>
           </tr>
         `;
@@ -986,9 +1012,31 @@ export default function PosView({
                           </div>
                         )}
                       </div>
-                      <div className="text-xs font-bold leading-tight mb-2 text-white line-clamp-2 h-8 font-display">
+                      <div className="text-xs font-bold leading-tight mb-1 text-white line-clamp-2 min-h-6 font-display">
                         {p.name}
                       </div>
+                      {(p.genericName || p.dosage) && (
+                        <div className="text-[10px] text-slate-400 font-medium truncate mb-1">
+                          {p.genericName && <span className="italic">{p.genericName}</span>}
+                          {p.genericName && p.dosage && <span className="mx-1">•</span>}
+                          {p.dosage && <span className="text-indigo-400 font-bold">{p.dosage}</span>}
+                        </div>
+                      )}
+                      {p.expiryDate && (() => {
+                        const today = new Date().toISOString().slice(0, 10);
+                        const isExpired = p.expiryDate < today;
+                        return (
+                          <div className="mb-2">
+                            <span className={`text-[8px] font-black px-1.5 py-0.5 rounded border ${
+                              isExpired 
+                                ? "bg-rose-500/20 text-rose-400 border-rose-500/30" 
+                                : "bg-white/5 text-slate-400 border-white/10"
+                            }`}>
+                              {isExpired ? "EXPIRED" : `Exp: ${p.expiryDate.slice(2)}`}
+                            </span>
+                          </div>
+                        );
+                      })()}
                       <div className="flex items-center justify-between mt-auto">
                         <div className="text-indigo-400 font-black text-sm font-display">
                           {(p.retailPrice || 0).toLocaleString()}{" "}

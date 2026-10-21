@@ -5,7 +5,7 @@ import {
   ShoppingCart, Package, ListChecks, Users, HelpCircle, Truck, 
   Clock, DollarSign, ArrowUpRight, TrendingUp, Award, Percent, Calendar, Building2, ChevronDown, Sparkles, ShieldCheck,
   Wifi, WifiOff, Bell, BellOff, Zap, Receipt, Table, Sun, Moon, Lock, Shield, Globe, Check, Download,
-  Smartphone, Share2, PlusSquare, MoreVertical, X, FileText, Menu
+  Smartphone, Share2, PlusSquare, MoreVertical, X, FileText, Menu, AlertTriangle
 } from "lucide-react";
 import { auth, db } from "./firebase";
 import { 
@@ -27,6 +27,7 @@ import BranchManager from "./components/BranchManager";
 import FeatureGuide from "./components/FeatureGuide";
 import TermsModal from "./components/TermsModal";
 import MobileSidebarDrawer from "./components/MobileSidebarDrawer";
+import { getExpiryInfo, getExpiredProducts, getExpiringSoonProducts } from "./lib/pharmacy";
 import OfflineIndicator from "./components/OfflineIndicator";
 import { translations, Language } from "./lib/translations";
 import { motion, AnimatePresence } from "motion/react";
@@ -119,6 +120,9 @@ export default function App() {
 
   // Search in inventory
   const [invSearch, setInvSearch] = useState("");
+  // Inventory Filter Tab state
+  const [invFilter, setInvFilter] = useState<"all" | "low-stock" | "expiring" | "expired">("all");
+
 
   // Report active date filter
   const [reportPeriod, setReportPeriod] = useState<"today" | "yesterday" | "week" | "month" | "all">("all");
@@ -819,16 +823,40 @@ export default function App() {
   }, [salesHistory]);
 
   const filteredInventoryProducts = useMemo(() => {
-    if (!invSearch) return allProducts;
+    let prods = allProducts;
+    const today = new Date().toISOString().slice(0, 10);
+    const in60d = new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+    if (invFilter === "low-stock") {
+      prods = prods.filter((p) => p.quantity <= (p.lowStockThreshold || 5));
+    } else if (invFilter === "expiring") {
+      prods = prods.filter((p) => p.expiryDate && p.expiryDate >= today && p.expiryDate <= in60d);
+    } else if (invFilter === "expired") {
+      prods = prods.filter((p) => p.expiryDate && p.expiryDate < today);
+    }
+
+    if (!invSearch) return prods;
     const term = invSearch.toLowerCase();
-    return allProducts.filter(
+    return prods.filter(
       (p) =>
-        p.name.toLowerCase().includes(term) || p.sku.toLowerCase().includes(term)
+        p.name.toLowerCase().includes(term) ||
+        p.sku.toLowerCase().includes(term) ||
+        (p.genericName && p.genericName.toLowerCase().includes(term)) ||
+        (p.batchNumber && p.batchNumber.toLowerCase().includes(term)) ||
+        (p.barcode && p.barcode.toLowerCase().includes(term))
     );
-  }, [allProducts, invSearch]);
+  }, [allProducts, invSearch, invFilter]);
 
   const lowStockCount = useMemo(() => {
     return allProducts.filter((p) => p.quantity <= (p.lowStockThreshold || 5)).length;
+  }, [allProducts]);
+
+  const expiringCount = useMemo(() => {
+    return getExpiringSoonProducts(allProducts, 60).length;
+  }, [allProducts]);
+
+  const expiredCount = useMemo(() => {
+    return getExpiredProducts(allProducts).length;
   }, [allProducts]);
 
   // --- Auth Render fallback ---
@@ -1425,6 +1453,44 @@ export default function App() {
               </div>
             )}
 
+            {/* Pharmacy Expiry Alert Banner */}
+            {(expiredCount > 0 || expiringCount > 0) && (
+              <div className="bg-gradient-to-r from-rose-500/15 via-amber-500/10 to-transparent border border-amber-500/30 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-inner">
+                <div className="flex items-center gap-3">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                    expiredCount > 0
+                      ? "bg-rose-500/20 text-rose-400 border border-rose-500/30"
+                      : "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                  }`}>
+                    <AlertTriangle size={20} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-white font-display flex items-center gap-2">
+                      <span>{lang === "my" ? "ဆေးဝါး သက်တမ်းကုန်ဆုံးမှု သတိပေးချက်" : "Pharmacy Expiry Alert"}</span>
+                    </h4>
+                    <p className="text-[11px] text-slate-300 font-medium mt-0.5">
+                      {expiredCount > 0 && (
+                        <span className="text-rose-400 font-bold mr-2">
+                          {expiredCount} {lang === "my" ? "မျိုး သက်တမ်းကုန်ပြီ" : "items expired"}
+                        </span>
+                      )}
+                      {expiringCount > 0 && (
+                        <span className="text-amber-300 font-bold">
+                          {expiringCount} {lang === "my" ? "မျိုး ၆၀ ရက်အတွင်း ကုန်မည်" : "items expiring in 60d"}
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setActiveModal("expiry-alerts")}
+                  className="px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-black font-black text-xs rounded-xl transition cursor-pointer shrink-0 shadow-sm"
+                >
+                  {lang === "my" ? "ဆေးဝါးများ စစ်ဆေးရန်" : "Review Medicines"}
+                </button>
+              </div>
+            )}
+
             {/* Call to action POS banner */}
             <div className={`bg-[#121214] border border-neutral-800 rounded-[2rem] p-6 sm:p-7 shadow-sm relative overflow-hidden text-white shrink-0`}>
               <div className="absolute right-0 bottom-0 opacity-5 transform translate-x-1/4 translate-y-1/4 pointer-events-none">
@@ -1722,19 +1788,90 @@ export default function App() {
                   className={`w-full pl-9 pr-4 py-3 bg-white/5 border ${theme.border} ${theme.isLight ? "text-slate-800" : "text-white"} rounded-xl text-xs font-semibold outline-none focus:border-indigo-500/50 focus:bg-white/10 transition placeholder:text-slate-600`}
                 />
               </div>
-              <div className="flex gap-2">
+              {/* Filter Pills */}
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                <button
+                  onClick={() => setInvFilter("all")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                    invFilter === "all"
+                      ? "bg-indigo-500 text-white shadow"
+                      : "bg-white/5 text-slate-400 hover:text-white border border-white/5"
+                  }`}
+                >
+                  {lang === "my" ? "အားလုံး" : "All Items"} ({allProducts.length})
+                </button>
+
+                <button
+                  onClick={() => setInvFilter("low-stock")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                    invFilter === "low-stock"
+                      ? "bg-rose-500 text-white shadow"
+                      : "bg-white/5 text-slate-400 hover:text-white border border-white/5"
+                  }`}
+                >
+                  <span>{lang === "my" ? "လက်ကျန်နည်း" : "Low Stock"}</span>
+                  {lowStockCount > 0 && (
+                    <span className="text-[10px] bg-rose-500/20 text-rose-300 px-1.5 py-0.2 rounded-full font-black">
+                      {lowStockCount}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => setInvFilter("expiring")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                    invFilter === "expiring"
+                      ? "bg-amber-500 text-black shadow font-black"
+                      : "bg-white/5 text-slate-400 hover:text-white border border-white/5"
+                  }`}
+                >
+                  <span>{lang === "my" ? "သက်တမ်းကုန်ခါနီး (၆၀ရက်)" : "Expiring Soon"}</span>
+                  {expiringCount > 0 && (
+                    <span className="text-[10px] bg-amber-500/20 text-amber-300 px-1.5 py-0.2 rounded-full font-black">
+                      {expiringCount}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  onClick={() => setInvFilter("expired")}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
+                    invFilter === "expired"
+                      ? "bg-rose-600 text-white shadow font-black"
+                      : "bg-white/5 text-slate-400 hover:text-white border border-white/5"
+                  }`}
+                >
+                  <span>{lang === "my" ? "သက်တမ်းကုန်" : "Expired"}</span>
+                  {expiredCount > 0 && (
+                    <span className="text-[10px] bg-rose-500/30 text-rose-300 px-1.5 py-0.2 rounded-full font-black">
+                      {expiredCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              <div className="flex flex-wrap gap-2 pt-1">
                 <button
                   onClick={() => setActiveModal("add-product")}
-                  className={`flex-1 bg-gradient-to-r ${theme.gradientBtn} text-white py-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1 hover:brightness-110 transition cursor-pointer`}
+                  className={`flex-1 min-w-[140px] bg-gradient-to-r ${theme.gradientBtn} text-white py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 hover:brightness-110 transition cursor-pointer shadow-sm`}
                 >
                   <Plus size={16} /> {t.addProduct}
                 </button>
                 {lowStockCount > 0 && (
                   <button
                     onClick={() => setActiveModal("low-stock")}
-                    className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 px-4 py-3 rounded-xl font-bold text-xs flex items-center gap-1 cursor-pointer"
+                    className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 px-3 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1 cursor-pointer"
                   >
-                    {lang === "my" ? `လက်ကျန်နည်းပစ္စည်းများ (${lowStockCount})` : `Low Stock Items (${lowStockCount})`}
+                    {lang === "my" ? `လက်ကျန်နည်း (${lowStockCount})` : `Low Stock (${lowStockCount})`}
+                  </button>
+                )}
+                {(expiredCount > 0 || expiringCount > 0) && (
+                  <button
+                    onClick={() => setActiveModal("expiry-alerts")}
+                    className="bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 px-3 py-2.5 rounded-xl font-bold text-xs flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <AlertTriangle size={14} />
+                    <span>{lang === "my" ? `သက်တမ်းစစ်ဆေးရန် (${expiredCount + expiringCount})` : `Expiry Alerts (${expiredCount + expiringCount})`}</span>
                   </button>
                 )}
               </div>
@@ -1754,13 +1891,35 @@ export default function App() {
                         <Layers size={24} className="text-slate-600" />
                       </div>
                       <div className="flex-1 overflow-hidden">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-2 mb-0.5">
                           <h4 className={`font-bold text-sm ${theme.isLight ? "text-slate-900" : "text-white"} truncate font-display`}>{p.name}</h4>
-                          <span className={`${theme.textAccent} ${theme.bgAccent} border ${theme.borderAccent} px-2 py-0.5 rounded text-[8px] font-black uppercase`}>
+                          <span className={`${theme.textAccent} ${theme.bgAccent} border ${theme.borderAccent} px-2 py-0.5 rounded text-[8px] font-black uppercase shrink-0`}>
                             {p.category}
                           </span>
                         </div>
-                        <p className="text-[10px] text-slate-500 font-bold mb-1">SKU: {p.sku}</p>
+
+                        {/* Pharmacy Generic Name & Dosage */}
+                        {(p.genericName || p.dosage) && (
+                          <div className="text-[11px] text-slate-400 font-medium truncate mb-1">
+                            {p.genericName && <span className="italic">{p.genericName}</span>}
+                            {p.genericName && p.dosage && <span className="mx-1">•</span>}
+                            {p.dosage && <span className="text-indigo-400 font-bold">{p.dosage}</span>}
+                          </div>
+                        )}
+
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-slate-500 font-bold mb-1.5">
+                          <span>SKU: {p.sku}</span>
+                          {p.batchNumber && <span>Batch: <strong className="text-slate-300">{p.batchNumber}</strong></span>}
+                          {p.expiryDate && (() => {
+                            const info = getExpiryInfo(p.expiryDate);
+                            return (
+                              <span className={`px-1.5 py-0.2 rounded border font-bold ${info.badgeClass}`}>
+                                {lang === "my" ? info.labelMy : info.labelEn}
+                              </span>
+                            );
+                          })()}
+                        </div>
+
                         <div className={`flex gap-4 text-xs font-semibold ${theme.isLight ? "text-slate-600" : "text-slate-400"}`}>
                           <span>{lang === "my" ? "လက်လီ: " : "Retail: "}<b className={`${theme.isLight ? "text-slate-800" : "text-slate-200"}`}>{p.retailPrice.toLocaleString()} Ks</b></span>
                           <span>{lang === "my" ? "လက်ကျန်: " : "Stock: "}<b className={isLow ? "text-rose-400 font-black" : `${theme.isLight ? "text-slate-800" : "text-slate-200"}`}>{p.quantity}{lang === "my" ? "ခု" : " pcs"}</b></span>

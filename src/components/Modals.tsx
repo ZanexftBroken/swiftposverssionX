@@ -3,7 +3,7 @@ import {
   X, Plus, Trash2, AlertTriangle, CheckCircle, AlertCircle,
   Package, User, Phone, DollarSign, Clock, Truck, RotateCcw,
   Search, ChevronDown, Image, Tag, Boxes, Shield, FileText,
-  Settings, Store, MapPin, Receipt, Palette, Check, CheckCircle2, Sparkles, RefreshCcw, CreditCard
+  Settings, Store, MapPin, Receipt, Palette, Check, CheckCircle2, Sparkles, RefreshCcw, CreditCard, Calendar
 } from "lucide-react";
 import { db } from "../firebase";
 import {
@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import { Product, Customer, Supplier, ShopSettings, Expense, Purchase, Payroll, Shift } from "../types";
 import { THEMES } from "../lib/theme";
+import { getExpiryInfo, getExpiredProducts, getExpiringSoonProducts } from "../lib/pharmacy";
 import { translations, Language } from "../lib/translations";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -77,6 +78,13 @@ export default function Modals({
   const [pLowThreshold, setPLowThreshold] = useState(5);
   const [skuError, setSkuError] = useState("");
   const [hasVariants, setHasVariants] = useState(false);
+    // --- Pharmacy & Medical Fields ---
+  const [pBatchNumber, setPBatchNumber] = useState("");
+  const [pExpiryDate, setPExpiryDate] = useState("");
+  const [pGenericName, setPGenericName] = useState("");
+  const [pDosage, setPDosage] = useState("");
+  const [expiryModalTab, setExpiryModalTab] = useState<"expired" | "expiring">("expired");
+
   const [productVariants, setProductVariants] = useState<{
     id: string; name: string; sku: string; retailPrice: number;
     wholesalePrice: number; quantity: number;
@@ -237,6 +245,10 @@ export default function Modals({
         imageUrl: pImageUrl.trim() || null,
         hasVariants,
         variants: hasVariants ? productVariants : null,
+        batchNumber: pBatchNumber.trim() || null,
+        expiryDate: pExpiryDate || null,
+        genericName: pGenericName.trim() || null,
+        dosage: pDosage.trim() || null,
       });
 
       showToast("success", lang === "my" ? "ကုန်ပစ္စည်းအသစ် ထည့်သွင်းပြီးပါပြီ။" : "Product added successfully!");
@@ -658,6 +670,62 @@ export default function Modals({
                   />
                 )}
               </div>
+
+              {/* Pharmacy & Medical Details Card */}
+              <div className="bg-indigo-500/5 p-4 rounded-2xl border border-indigo-500/20 space-y-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0">
+                    <Calendar size={14} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black text-white">{t.pharmacySection || "Pharmacy & Expiry Details"}</h4>
+                    <p className="text-[10px] text-slate-400">{t.pharmacySectionSubtitle || "Batch number, expiry date, generic formula, and dosage"}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label className={labelCls}>{t.batchNumberLabel || "Batch No."}</label>
+                    <input
+                      type="text"
+                      value={pBatchNumber}
+                      onChange={(e) => setPBatchNumber(e.target.value)}
+                      placeholder={t.batchNumberPlaceholder || "e.g. BN-202410"}
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>{t.expiryDateLabel || "Expiry Date"}</label>
+                    <input
+                      type="date"
+                      value={pExpiryDate}
+                      onChange={(e) => setPExpiryDate(e.target.value)}
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>{t.genericNameLabel || "Generic / Formula"}</label>
+                    <input
+                      type="text"
+                      value={pGenericName}
+                      onChange={(e) => setPGenericName(e.target.value)}
+                      placeholder={t.genericNamePlaceholder || "e.g. Paracetamol, Amoxicillin"}
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>{t.dosageLabel || "Dosage / Strength"}</label>
+                    <input
+                      type="text"
+                      value={pDosage}
+                      onChange={(e) => setPDosage(e.target.value)}
+                      placeholder={t.dosagePlaceholder || "e.g. 500mg, 10ml, 1 tab x 3"}
+                      className={inputCls}
+                    />
+                  </div>
+                </div>
+              </div>
+
 
               {/* Variants form */}
               {hasVariants && (
@@ -1190,6 +1258,150 @@ export default function Modals({
               )}
             </div>
           )}
+
+          {/* ── 7B. EXPIRY ALERTS (Pharmacy) ─────────────────────────── */}
+          {modalType === "expiry-alerts" && (() => {
+            const expiredList = getExpiredProducts(allProducts);
+            const expiringList = getExpiringSoonProducts(allProducts, 60);
+
+            return (
+              <div className="space-y-4">
+                {/* Tabs */}
+                <div className="flex gap-2 p-1 bg-white/5 rounded-2xl border border-white/10">
+                  <button
+                    onClick={() => setExpiryModalTab("expired")}
+                    className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                      expiryModalTab === "expired"
+                        ? "bg-rose-500 text-white shadow-md shadow-rose-950"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <span>{lang === "my" ? "သက်တမ်းကုန်ပြီး" : "Expired"}</span>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                      expiryModalTab === "expired" ? "bg-white/20 text-white" : "bg-rose-500/20 text-rose-400"
+                    }`}>
+                      {expiredList.length}
+                    </span>
+                  </button>
+
+                  <button
+                    onClick={() => setExpiryModalTab("expiring")}
+                    className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer ${
+                      expiryModalTab === "expiring"
+                        ? "bg-amber-500 text-black shadow-md shadow-amber-950 font-black"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <span>{lang === "my" ? "၆၀ ရက်အတွင်း ကုန်မည်" : "Expiring in 60d"}</span>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                      expiryModalTab === "expiring" ? "bg-black/20 text-black" : "bg-amber-500/20 text-amber-300"
+                    }`}>
+                      {expiringList.length}
+                    </span>
+                  </button>
+                </div>
+
+                {/* Items List */}
+                <div className="space-y-2.5 max-h-[50vh] overflow-y-auto no-scrollbar">
+                  {expiryModalTab === "expired" ? (
+                    expiredList.length === 0 ? (
+                      <div className="text-center py-12 text-slate-500 font-bold">
+                        {t.noExpiredItems || "No expired items found."}
+                      </div>
+                    ) : (
+                      expiredList.map((p) => {
+                        const info = getExpiryInfo(p.expiryDate);
+                        return (
+                          <div
+                            key={p.id}
+                            className="bg-white/5 p-4 rounded-2xl border border-rose-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm hover:border-rose-500/50 transition"
+                          >
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <b className="text-white text-sm font-display">{p.name}</b>
+                                {p.dosage && (
+                                  <span className="text-[10px] bg-white/10 text-slate-300 px-1.5 py-0.5 rounded font-bold">
+                                    {p.dosage}
+                                  </span>
+                                )}
+                              </div>
+                              {p.genericName && (
+                                <p className="text-[11px] text-slate-400 font-semibold italic">
+                                  {p.genericName}
+                                </p>
+                              )}
+                              <div className="flex flex-wrap gap-2 text-[10px] text-slate-400">
+                                {p.batchNumber && <span>Batch: <strong className="text-white">{p.batchNumber}</strong></span>}
+                                <span>{lang === "my" ? "ကုန်ဆုံးရက်: " : "Expired on: "}<strong className="text-rose-400">{p.expiryDate}</strong></span>
+                                <span>{lang === "my" ? "လက်ကျန်: " : "Stock: "}<strong className="text-white">{p.quantity}</strong></span>
+                              </div>
+                            </div>
+
+                            <button
+                              onClick={() => {
+                                setAdjProdId(p.id);
+                                setAdjQty(0);
+                                setAdjReasonCode("Expired");
+                                setAdjNotes(`Disposing expired stock (Exp: ${p.expiryDate || "-"}, Batch: ${p.batchNumber || "-"})`);
+                                onClose();
+                              }}
+                              className="px-3 py-2 bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+                            >
+                              <span>{lang === "my" ? "စာရင်းမှ နှုတ်ပယ်ရန်" : "Dispose / Adjust"}</span>
+                            </button>
+                          </div>
+                        );
+                      })
+                    )
+                  ) : (
+                    expiringList.length === 0 ? (
+                      <div className="text-center py-12 text-slate-500 font-bold">
+                        {t.noExpiringItems || "No items expiring within 60 days."}
+                      </div>
+                    ) : (
+                      expiringList.map((p) => {
+                        const info = getExpiryInfo(p.expiryDate);
+                        return (
+                          <div
+                            key={p.id}
+                            className="bg-white/5 p-4 rounded-2xl border border-amber-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm hover:border-amber-500/50 transition"
+                          >
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <b className="text-white text-sm font-display">{p.name}</b>
+                                {p.dosage && (
+                                  <span className="text-[10px] bg-white/10 text-slate-300 px-1.5 py-0.5 rounded font-bold">
+                                    {p.dosage}
+                                  </span>
+                                )}
+                              </div>
+                              {p.genericName && (
+                                <p className="text-[11px] text-slate-400 font-semibold italic">
+                                  {p.genericName}
+                                </p>
+                              )}
+                              <div className="flex flex-wrap gap-2 text-[10px] text-slate-400">
+                                {p.batchNumber && <span>Batch: <strong className="text-white">{p.batchNumber}</strong></span>}
+                                <span>{lang === "my" ? "ကုန်ဆုံးရက်: " : "Expiry: "}<strong className="text-amber-400">{p.expiryDate}</strong></span>
+                                <span>{lang === "my" ? "လက်ကျန်: " : "Stock: "}<strong className="text-white">{p.quantity}</strong></span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="px-2.5 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-xl text-[11px] font-black font-display">
+                                {info.days} {lang === "my" ? "ရက်ကျန်" : "days left"}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+
 
           {/* ── 8. STOCK ADJUSTMENT — Enhanced ──────────────────────────────── */}
           {modalType === "stock-adjust" && (

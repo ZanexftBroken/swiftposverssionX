@@ -29,6 +29,11 @@ export interface Product {
   hasVariants?: boolean;
   variants?: ProductVariant[];
   branchQuantities?: Record<string, number>;
+  // Pharmacy & Medical fields
+  batchNumber?: string;
+  expiryDate?: string;
+  genericName?: string;
+  dosage?: string;
 }
 
 export interface CartItem {
@@ -40,6 +45,11 @@ export interface CartItem {
   costPrice: number;
   disc: number;
   variantId?: string;
+  // Pharmacy & Medical fields
+  batchNumber?: string;
+  expiryDate?: string;
+  genericName?: string;
+  dosage?: string;
 }
 
 export interface SplitPayment {
